@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darvas Box Scanner & Backtester</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary:#f8fafc;--bg-secondary:#ffffff;--bg-card:#ffffff;--bg-card-hover:#f1f5f9;
+  --border:#e2e8f0;--border-active:#cbd5e1;
+  --text-primary:#0f172a;--text-secondary:#475569;--text-muted:#94a3b8;
+  --accent-green:#16a34a;--accent-green-dim:rgba(22,163,74,.08);
+  --accent-red:#dc2626;--accent-red-dim:rgba(220,38,38,.08);
+  --accent-cyan:#0891b2;--accent-cyan-dim:rgba(8,145,178,.08);
+  --accent-amber:#d97706;--accent-amber-dim:rgba(217,119,6,.08);
+  --accent-purple:#7c3aed;--accent-purple-dim:rgba(124,58,237,.08);
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg:0 4px 12px rgba(0,0,0,.08);
+  --radius:8px;--radius-lg:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px}
+body{font-family:'DM Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh}
+
+.header{background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:14px 24px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+.header-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.header-title{font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--accent-cyan)}
+.header-subtitle{color:var(--text-muted);font-size:.72rem;margin-top:2px}
+.header-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:.72rem;font-weight:600;font-family:'JetBrains Mono',monospace;background:var(--accent-green-dim);color:var(--accent-green)}
+.header-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent-green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.controls-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ctrl-group{display:flex;align-items:center;gap:5px}
+.ctrl-label{font-size:.7rem;font-weight:600;color:var(--text-muted);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px}
+select,input[type="number"],input[type="text"]{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:5px 8px;border-radius:var(--radius);font-family:'JetBrains Mono',monospace;font-size:.76rem;outline:none}
+select:focus,input:focus{border-color:var(--accent-cyan);box-shadow:0 0 0 2px rgba(8,145,178,.15)}
+input[type="number"]{width:65px}
+.btn{padding:6px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:.76rem;font-weight:600;cursor:pointer;transition:all .2s;box-shadow:var(--shadow)}
+.btn:hover{background:var(--bg-card-hover);border-color:var(--border-active)}
+.btn-primary{background:var(--accent-cyan);border-color:var(--accent-cyan);color:#fff}
+.btn-primary:hover{opacity:.9}
+
+.tabs{display:flex;gap:2px;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:0 24px}
+.tab{padding:10px 18px;font-size:.8rem;font-weight:600;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;user-select:none}
+.tab:hover{color:var(--text-secondary)}
+.tab.active{color:var(--accent-cyan);border-bottom-color:var(--accent-cyan)}
+
+.main{padding:16px 24px 40px;max-width:1600px;margin:0 auto}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:14px;box-shadow:var(--shadow)}
+.card-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-title{font-size:.85rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.card-body{padding:14px 16px}
+.card-badge{padding:3px 10px;border-radius:12px;font-size:.66rem;font-weight:600;font-family:'JetBrains Mono',monospace}
+.badge-cyan{background:var(--accent-cyan-dim);color:var(--accent-cyan)}
+.badge-green{background:var(--accent-green-dim);color:var(--accent-green)}
+.badge-red{background:var(--accent-red-dim);color:var(--accent-red)}
+.badge-amber{background:var(--accent-amber-dim);color:var(--accent-amber)}
+
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.stat-box{background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center}
+.stat-value{font-family:'JetBrains Mono',monospace;font-size:1.4rem;font-weight:700;margin-bottom:3px}
+.stat-label{font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+
+.tbl{width:100%;border-collapse:collapse;font-size:.76rem}
+.tbl th{text-align:left;padding:8px 10px;font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);font-weight:600;font-family:'JetBrains Mono',monospace;border-bottom:2px solid var(--border);background:var(--bg-card);position:sticky;top:0}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.74rem}
+.tbl tr:hover td{background:var(--bg-card-hover)}
+.table-scroll{max-height:450px;overflow-y:auto}
+.table-scroll::-webkit-scrollbar{width:5px}
+.table-scroll::-webkit-scrollbar-track{background:var(--bg-primary)}
+.table-scroll::-webkit-scrollbar-thumb{background:var(--border-active);border-radius:3px}
+
+.chart-box{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px;margin-bottom:14px;box-shadow:var(--shadow)}
+.chart-title{font-size:.76rem;font-weight:700;margin-bottom:6px;color:var(--text-secondary)}
+
+.signal-buy{color:var(--accent-green);font-weight:700}
+.signal-sell{color:var(--accent-red);font-weight:700}
+.signal-hold{color:var(--accent-amber);font-weight:700}
+
+.info-box{background:var(--accent-cyan-dim);border:1px solid rgba(8,145,178,.15);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:.76rem;color:var(--text-secondary);line-height:1.5}
+.info-box strong{color:var(--accent-cyan)}
+
+.status-bar{padding:6px 16px;background:var(--bg-secondary);border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text-muted);position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-between;z-index:100}
+
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:1000}
+.loading-spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent-cyan);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--text-secondary)}
+.loading-sub{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text-muted);margin-top:6px}
+.progress-bar{width:260px;height:4px;background:var(--border);border-radius:2px;margin-top:14px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-green));border-radius:2px;width:0%;transition:width .3s}
+
+.clickable{cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Generating Market Data...</div>
+  <div class="loading-sub" id="loadingSub">Building 5-year universe</div>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+</div>
+
+<div class="header">
+  <div class="header-top">
+    <div>
+      <div class="header-title">📦 DARVAS BOX SCANNER & BACKTESTER</div>
+      <div class="header-subtitle">Algorithmic breakout detection · Live Yahoo Finance data · v3.1</div>
+    </div>
+    <span class="header-badge" id="statusBadge">LOADING</span>
+  </div>
+  <div class="controls-bar">
+    <div class="ctrl-group"><span class="ctrl-label">Box Period:</span><input type="number" id="inpBoxPeriod" value="20" min="5" max="100"></div>
+    <div class="ctrl-group"><span class="ctrl-label">Vol Mult:</span><input type="number" id="inpVolMult" value="1.5" min="1" max="5" step=".1"></div>
+    <button class="btn btn-primary" onclick="runFullPipeline()">🔍 Scan & Backtest</button>
+    <button class="btn" onclick="runFullPipeline()" id="btnLive" title="Re-fetch latest data from Yahoo Finance">🔄 Refresh Data</button>
+    <label style="display:flex;align-items:center;gap:4px;font-size:.68rem;color:var(--text-muted);cursor:pointer" title="Auto-refresh data every 30 minutes">
+      <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()"> Auto (30m)
+    </label>
+    <span id="liveStatus" style="font-size:.68rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace"></span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="scanner">📡 Scanner</div>
+  <div class="tab" data-tab="backtest">📊 Backtest</div>
+  <div class="tab" data-tab="chart">📈 Box Chart</div>
+  <div class="tab" data-tab="methodology">📖 Method</div>
+</div>
+
+<div class="main">
+  <!-- SCANNER -->
+  <div class="tab-panel active" id="tab-scanner">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="info-box" style="margin-bottom:0;flex:1"><strong>Darvas Box Scanner</strong> — actionable signals. Click any ticker to see its chart.</div>
+      <div style="text-align:right;min-width:200px;padding-left:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--text-muted)">Latest data: <strong id="dataTimestamp" style="color:var(--text-primary)">—</strong></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--text-muted)" id="refreshTimestamp">—</div>
+      </div>
+    </div>
+
+    <div class="grid g4" style="margin-bottom:14px">
+      <div class="stat-box"><div class="stat-value" id="statTotal">—</div><div class="stat-label">Scanned</div></div>
+      <div class="stat-box"><div class="stat-value signal-buy" id="statBreakout">—</div><div class="stat-label">Breakouts</div></div>
+      <div class="stat-box"><div class="stat-value signal-hold" id="statForming">—</div><div class="stat-label">In Box</div></div>
+      <div class="stat-box"><div class="stat-value signal-sell" id="statBreakdown">—</div><div class="stat-label">Breakdowns</div></div>
+    </div>
+
+    <!-- ACTION REQUIRED: active breakouts and breakdowns -->
+    <div class="card" id="actionCard">
+      <div class="card-header"><div class="card-title">🚨 Action Required — Today</div><span class="card-badge badge-red" id="actionCount">0</span></div>
+      <div class="card-body" id="actionBody"><div style="color:var(--text-muted);font-size:.76rem">No breakouts or breakdowns today.</div></div>
+    </div>
+
+    <!-- WATCH LIST: within 3% of box top, rising volume -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">👁️ Watch List — Approaching Breakout</div><span class="card-badge badge-amber" id="watchCount">0</span></div>
+      <div class="table-scroll" style="max-height:250px"><table class="tbl"><thead><tr><th>Ticker</th><th>Price</th><th>Box Top</th><th>Dist to Top</th><th>Vol Trend</th><th>Vol×</th><th>Box Width</th><th>Action</th></tr></thead><tbody id="watchBody"></tbody></table></div>
+    </div>
+
+    <!-- RECENT 10-DAY ACTIVITY -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">📅 Recent Activity — Last 10 Days</div><span class="card-badge badge-cyan" id="recentCount">0</span></div>
+      <div class="table-scroll" style="max-height:250px"><table class="tbl"><thead><tr><th>Ticker</th><th>Event</th><th>Date</th><th>Days Ago</th><th>Price</th><th>Box Top</th><th>Vol×</th></tr></thead><tbody id="recentBody"></tbody></table></div>
+    </div>
+
+    <!-- ALL SIGNALS -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">📦 All Box Status</div><span class="card-badge badge-cyan" id="breakoutCount">0</span></div>
+      <div class="table-scroll"><table class="tbl"><thead><tr><th>Ticker</th><th>Price</th><th>Box Top</th><th>Box Bot</th><th>Position</th><th>Vol×</th><th>Width%</th><th>Signal</th></tr></thead><tbody id="signalBody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- BACKTEST -->
+  <div class="tab-panel" id="tab-backtest">
+    <div class="info-box"><strong>Backtest Engine</strong> — buy on breakout above box top with volume confirmation; sell on close below box bottom. 5-year simulation.</div>
+    <div class="grid g2" style="margin-bottom:14px">
+      <div class="card">
+        <div class="card-header"><div class="card-title">⚙️ Parameters</div></div>
+        <div class="card-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><span class="ctrl-label">Sizing:</span><select id="btSizing" style="width:100%"><option value="equal" selected>Equal Weight</option><option value="vol">Vol Scaled</option><option value="risk">Risk Parity (2%)</option></select></div>
+          <div><span class="ctrl-label">Max Pos:</span><input type="number" id="btMaxPos" value="10" min="1" max="30" style="width:100%"></div>
+          <div><span class="ctrl-label">Capital (S$):</span><input type="number" id="btCapital" value="1000000" step="100000" style="width:100%"></div>
+          <div><span class="ctrl-label">Cost (bps):</span><input type="number" id="btCost" value="10" min="0" max="50" style="width:100%"></div>
+          <div><span class="ctrl-label">Stop:</span><select id="btStop" style="width:100%"><option value="box" selected>Box Bottom</option><option value="atr2">2× ATR Trail</option><option value="pct5">-5% Fixed</option><option value="pct10">-10% Fixed</option></select></div>
+          <div><span class="ctrl-label">Regime:</span><select id="btRegime" style="width:100%"><option value="none">None</option><option value="ma200" selected>SPY > 200d MA</option><option value="ma50">SPY > 50d MA</option></select></div>
+          <div style="grid-column:span 2;margin-top:4px"><button class="btn btn-primary" onclick="rerunBacktest()" style="width:100%">⚡ Run Backtest</button></div>
+        </div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">📊 Performance</div></div>
+        <div class="card-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="stat-box"><div class="stat-value" id="btCAGR">—</div><div class="stat-label">CAGR</div></div>
+          <div class="stat-box"><div class="stat-value" id="btSharpe">—</div><div class="stat-label">Sharpe</div></div>
+          <div class="stat-box"><div class="stat-value" id="btMaxDD">—</div><div class="stat-label">Max DD</div></div>
+          <div class="stat-box"><div class="stat-value" id="btWinRate">—</div><div class="stat-label">Win Rate</div></div>
+          <div class="stat-box"><div class="stat-value" id="btTrades">—</div><div class="stat-label">Trades</div></div>
+          <div class="stat-box"><div class="stat-value" id="btAvgWin">—</div><div class="stat-label">Avg W / L</div></div>
+        </div></div>
+      </div>
+    </div>
+    <div class="chart-box"><div class="chart-title">Equity Curve</div><div id="btEquityChart" style="height:320px"></div></div>
+    <div class="grid g2">
+      <div class="chart-box"><div class="chart-title">Monthly Returns</div><div id="btMonthlyChart" style="height:280px"></div></div>
+      <div class="chart-box"><div class="chart-title">Drawdown</div><div id="btDrawdownChart" style="height:280px"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 Trade Log</div><span class="card-badge badge-cyan" id="tradeLogCount">0</span></div>
+      <div id="tradeLogDiag" style="padding:8px 16px;font-size:.72rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace;border-bottom:1px solid var(--border)"></div>
+      <div class="table-scroll" style="max-height:400px"><table class="tbl"><thead><tr><th>Entry</th><th>Exit</th><th>Ticker</th><th>In$</th><th>Out$</th><th>Ret%</th><th>Days</th><th>Status</th></tr></thead><tbody id="tradeLogBody"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="tab-panel" id="tab-chart">
+    <div class="info-box"><strong>Box Visualizer</strong> — green boxes = breakout, red = breakdown, blue = forming.</div>
+    <div class="controls-bar" style="margin-bottom:14px">
+      <div class="ctrl-group"><span class="ctrl-label">Ticker:</span><select id="chartTicker" style="width:120px"></select></div>
+      <button class="btn btn-primary" onclick="loadTickerChart()">Load</button>
+    </div>
+    <div class="chart-box"><div class="chart-title" id="chartTickerTitle">—</div><div id="boxChart" style="height:480px"></div></div>
+    <div class="grid g3">
+      <div class="stat-box"><div class="stat-value" id="csBoxes">—</div><div class="stat-label">Boxes</div></div>
+      <div class="stat-box"><div class="stat-value signal-buy" id="csBreakouts">—</div><div class="stat-label">Breakouts</div></div>
+      <div class="stat-box"><div class="stat-value signal-sell" id="csBreakdowns">—</div><div class="stat-label">Breakdowns</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">💰 Trade P&L — Single Stock</div></div>
+      <div class="card-body" id="tickerTradeStats"><div class="info-box">Select a ticker and click Load to see trades.</div></div>
+    </div>
+  </div>
+
+  <!-- METHODOLOGY -->
+  <div class="tab-panel" id="tab-methodology">
+    <div class="card"><div class="card-header"><div class="card-title">📖 Method</div></div>
+    <div class="card-body" style="line-height:1.7;color:var(--text-secondary)">
+      <p style="margin-bottom:10px"><strong style="color:var(--accent-cyan)">Box:</strong> Highest high & lowest low over N-day lookback. Represents consolidation.</p>
+      <p style="margin-bottom:10px"><strong style="color:var(--accent-green)">▲ BUY:</strong> Day's close breaks above the rolling N-day high AND volume ≥ X× the 20-day average.</p>
+      <p style="margin-bottom:10px"><strong style="color:var(--accent-red)">▼ SELL:</strong> Close below the box bottom (N-day low at entry). No exceptions.</p>
+      <p style="margin-bottom:10px"><strong style="color:var(--accent-cyan)">Key fix in v3:</strong> The backtest uses a rolling Donchian channel approach — at each bar, the box top is the N-day highest high and box bottom is the N-day lowest low. A breakout occurs when today's close exceeds yesterday's N-day high on above-average volume. This avoids the retroactive resolution bug where pre-computed boxes couldn't identify "forming" state during the backtest.</p>
+      <p><strong style="color:var(--accent-amber)">Data:</strong> Live 5-year daily OHLCV from Yahoo Finance via CORS proxy. 42 stocks across Tech, Health, Financials, Energy, Consumer, Industrials, Utilities, Communications + SPY benchmark.</p>
+    </div></div>
+  </div>
+</div>
+
+<div class="status-bar"><span id="statusLeft">Ready</span><span id="statusRight">v3.0</span></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// UNIVERSE — Live Yahoo Finance tickers
+// ═══════════════════════════════════════════════════════════════
+const UNIVERSE = [
+  'SPY',
+  // Tech
+  'AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','AVGO','AMD','CRM','ORCL','ADBE',
+  // Health
+  'LLY','UNH','JNJ','MRK','ABBV','PFE',
+  // Financials
+  'JPM','V','MA','BAC','GS','BLK',
+  // Energy
+  'XOM','CVX','COP',
+  // Consumer
+  'HD','MCD','COST','PG','KO','WMT',
+  // Industrials
+  'CAT','HON','GE',
+  // Utilities
+  'NEE','SO','DUK',
+  // Comm
+  'NFLX','DIS','CMCSA',
+];
+
+// ═══════════════════════════════════════════════════════════════
+// ROLLING DONCHIAN BOX DETECTION
+// This is the KEY FIX: instead of pre-detecting boxes then looking
+// up resolution retroactively, we compute a rolling N-day high/low
+// at each bar. A "breakout" is when close > yesterday's N-day high
+// on volume. This is what Darvas actually did — real-time detection.
+// ═══════════════════════════════════════════════════════════════
+function computeRollingBoxes(data, period=20) {
+  // Returns arrays aligned with data: boxTop[i], boxBottom[i], avgVol[i]
+  const n = data.length;
+  const boxTop = new Float64Array(n);
+  const boxBottom = new Float64Array(n);
+  const avgVol = new Float64Array(n);
+
+  for (let i = 0; i < n; i++) {
+    // N-day highest high and lowest low (looking back)
+    const start = Math.max(0, i - period + 1);
+    let hi = -Infinity, lo = Infinity;
+    for (let j = start; j <= i; j++) {
+      if (data[j].high > hi) hi = data[j].high;
+      if (data[j].low < lo) lo = data[j].low;
+    }
+    boxTop[i] = hi;
+    boxBottom[i] = lo;
+
+    // 20d average volume
+    const vs = Math.max(0, i - 19);
+    let sv = 0;
+    for (let j = vs; j <= i; j++) sv += data[j].volume;
+    avgVol[i] = sv / (i - vs + 1);
+  }
+
+  return { boxTop, boxBottom, avgVol };
+}
+
+// Detect breakout/breakdown events for scanner display
+function detectBoxEvents(data, period=20) {
+  const { boxTop, boxBottom, avgVol } = computeRollingBoxes(data, period);
+  const events = [];
+
+  for (let i = period + 1; i < data.length; i++) {
+    const prevTop = boxTop[i-1];
+    const prevBot = boxBottom[i-1];
+    const vr = data[i].volume / (avgVol[i-1] || 1);
+
+    if (data[i].close > prevTop) {
+      events.push({ idx: i, type: 'breakout', price: data[i].close, boxTop: prevTop, boxBottom: prevBot, volRatio: vr, date: data[i].date });
+    } else if (data[i].close < prevBot) {
+      events.push({ idx: i, type: 'breakdown', price: data[i].close, boxTop: prevTop, boxBottom: prevBot, volRatio: vr, date: data[i].date });
+    }
+  }
+  return events;
+}
+
+// For chart visualization: identify box rectangles
+function getBoxRects(data, period=20) {
+  const { boxTop, boxBottom } = computeRollingBoxes(data, period);
+  const rects = [];
+  let inBox = false, bxStart = 0, bxTop = 0, bxBot = 0;
+
+  for (let i = period; i < data.length; i++) {
+    const t = boxTop[i-1], b = boxBottom[i-1];
+    const width = t > 0 ? (t - b) / b : 0;
+    if (width < 0.005 || width > 0.25) { inBox = false; continue; }
+
+    if (!inBox) {
+      inBox = true; bxStart = i; bxTop = t; bxBot = b;
+    }
+
+    // Box changed or price broke out
+    if (Math.abs(t - bxTop) > bxTop * 0.001 || Math.abs(b - bxBot) > bxBot * 0.001 || data[i].close > bxTop || data[i].close < bxBot) {
+      const res = data[i].close > bxTop ? 'breakout' : data[i].close < bxBot ? 'breakdown' : 'shift';
+      if (i - bxStart >= 3) { // Only show boxes that lasted at least 3 days
+        rects.push({ startDate: data[bxStart].date, endDate: data[i].date, top: bxTop, bottom: bxBot, resolution: res });
+      }
+      inBox = false;
+    }
+  }
+  if (inBox && data.length - bxStart >= 3) {
+    rects.push({ startDate: data[bxStart].date, endDate: data[data.length-1].date, top: bxTop, bottom: bxBot, resolution: 'forming' });
+  }
+  return rects;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BACKTEST ENGINE v3 — Rolling Donchian breakout
+// ═══════════════════════════════════════════════════════════════
+function runBacktest(allData, params) {
+  const { boxPeriod, volMult, maxPositions, initialCapital, costBps, stopType, regimeFilter, sizing } = params;
+  const spyData = allData['SPY'];
+  if (!spyData || spyData.length < 260) return null;
+
+  // Pre-compute rolling boxes for all tickers
+  const tkRolling = {};
+  const tickers = Object.keys(allData).filter(t => t !== 'SPY');
+  for (const tk of tickers) {
+    const d = allData[tk];
+    if (!d || d.length < boxPeriod + 30) continue;
+    tkRolling[tk] = computeRollingBoxes(d, boxPeriod);
+    // Also build date→index for this ticker
+    tkRolling[tk].dateIdx = {};
+    d.forEach((bar, idx) => { tkRolling[tk].dateIdx[bar.date] = idx; });
+  }
+  const activeTickers = Object.keys(tkRolling);
+
+  // SPY MAs
+  const spyMA = new Float64Array(spyData.length);
+  const spyMA50 = new Float64Array(spyData.length);
+  let rs = 0, rs5 = 0;
+  for (let i = 0; i < spyData.length; i++) {
+    rs += spyData[i].close; rs5 += spyData[i].close;
+    if (i >= 200) rs -= spyData[i-200].close;
+    if (i >= 50) rs5 -= spyData[i-50].close;
+    spyMA[i] = i >= 199 ? rs / 200 : 0;
+    spyMA50[i] = i >= 49 ? rs5 / 50 : 0;
+  }
+
+  let cash = initialCapital;
+  const positions = [], trades = [], equityCurve = [], dates = [];
+  const startDay = 210;
+  let skippedRegime = 0, skippedFull = 0, skippedCash = 0, totalSignals = 0;
+  let regimeOn = true, regimeOffSince = null, lastRegimeChange = null;
+
+  for (let si = startDay; si < spyData.length; si++) {
+    const date = spyData[si].date;
+
+    // Regime
+    let rok = true;
+    if (regimeFilter === 'ma200') rok = spyMA[si] > 0 && spyData[si].close > spyMA[si];
+    else if (regimeFilter === 'ma50') rok = spyMA50[si] > 0 && spyData[si].close > spyMA50[si];
+
+    if (rok !== regimeOn) { lastRegimeChange = date; regimeOn = rok; }
+    if (!rok && !regimeOffSince) regimeOffSince = date;
+    else if (rok) regimeOffSince = null;
+
+    // ── EXITS ──
+    for (let p = positions.length - 1; p >= 0; p--) {
+      const pos = positions[p];
+      const r = tkRolling[pos.ticker];
+      if (!r) continue;
+      const di = r.dateIdx[date];
+      if (di === undefined) continue;
+      const bar = allData[pos.ticker][di];
+      pos.hwm = Math.max(pos.hwm || pos.ep, bar.high);
+
+      let exit = false, reason = '';
+
+      // Primary: check if close < entry box bottom (Darvas stop)
+      if (stopType === 'box' && bar.close < pos.stop) { exit = true; reason = 'Box Stop'; }
+      else if (stopType === 'atr2') {
+        // Proper 14-day ATR approximation using rolling high-low range
+        let atrSum = 0, atrN = 0;
+        for (let k = Math.max(0, di - 13); k <= di; k++) {
+          atrSum += allData[pos.ticker][k].high - allData[pos.ticker][k].low;
+          atrN++;
+        }
+        const atr14 = atrN > 0 ? atrSum / atrN : bar.high - bar.low;
+        if (bar.close < pos.hwm - 2 * atr14) { exit = true; reason = '2×ATR'; }
+      }
+      else if (stopType === 'pct5' && bar.close < pos.ep * 0.95) { exit = true; reason = '5% Stop'; }
+      else if (stopType === 'pct10' && bar.close < pos.ep * 0.90) { exit = true; reason = '10% Stop'; }
+
+      // Also exit if current rolling box bottom is breached
+      if (!exit && di > 0 && bar.close < r.boxBottom[di-1]) { exit = true; reason = 'Box Break'; }
+
+      if (exit) {
+        const nr = (bar.close / pos.ep - 1) - (costBps / 10000) * 2;
+        cash += pos.notional * (1 + nr);
+        trades.push({ ticker: pos.ticker, entryDate: pos.ed, exitDate: date, entryPrice: pos.ep,
+          exitPrice: bar.close, returnPct: +(nr * 100).toFixed(2), holdDays: Math.round((new Date(date) - new Date(pos.ed)) / 864e5), exitReason: reason });
+        positions.splice(p, 1);
+      }
+    }
+
+    // ── ENTRIES ──
+    // First, count all valid signals regardless of constraints
+    {
+      const held = new Set(positions.map(p => p.ticker));
+      for (const tk of activeTickers) {
+        if (held.has(tk)) continue;
+        const r = tkRolling[tk];
+        const di = r.dateIdx[date];
+        if (di === undefined || di < boxPeriod + 1) continue;
+        const bar = allData[tk][di];
+        const prevTop = r.boxTop[di - 1];
+        const prevBot = r.boxBottom[di - 1];
+        const prevAvgVol = r.avgVol[di - 1] || 1;
+        const vr = bar.volume / prevAvgVol;
+        const boxWidth = prevTop > 0 ? (prevTop - prevBot) / prevBot : 0;
+        if (bar.close > prevTop && vr >= volMult && boxWidth >= 0.01 && boxWidth <= 0.20) {
+          totalSignals++;
+          if (!rok) skippedRegime++;
+        }
+      }
+    }
+
+    if (rok && positions.length < maxPositions) {
+      const held = new Set(positions.map(p => p.ticker));
+      const cands = [];
+
+      for (const tk of activeTickers) {
+        if (held.has(tk)) continue;
+        const r = tkRolling[tk];
+        const di = r.dateIdx[date];
+        if (di === undefined || di < boxPeriod + 1) continue;
+
+        const bar = allData[tk][di];
+        const prevTop = r.boxTop[di - 1];
+        const prevBot = r.boxBottom[di - 1];
+        const prevAvgVol = r.avgVol[di - 1] || 1;
+        const vr = bar.volume / prevAvgVol;
+        const boxWidth = prevTop > 0 ? (prevTop - prevBot) / prevBot : 0;
+
+        // ENTRY: close > yesterday's N-day high, volume above threshold, reasonable box width
+        if (bar.close > prevTop && vr >= volMult && boxWidth >= 0.01 && boxWidth <= 0.20) {
+          cands.push({ ticker: tk, price: bar.close, vr, bpct: bar.close / prevTop - 1, bot: prevBot, atr: bar.high - bar.low });
+        }
+      }
+
+      cands.sort((a, b) => b.bpct - a.bpct);
+      const slots = maxPositions - positions.length;
+      const overflow = Math.max(0, cands.length - slots);
+      skippedFull += overflow;
+
+      for (const c of cands.slice(0, slots)) {
+        let notional;
+        const avail = cash * 0.95;
+        if (sizing === 'equal') notional = Math.min(avail, initialCapital / maxPositions);
+        else if (sizing === 'vol') { const pa = c.atr / c.price; notional = pa > 0 ? Math.min(initialCapital * 0.01 / pa, avail) : 0; }
+        else { const sd = (c.price - c.bot) / c.price; notional = sd > 0.001 ? Math.min(initialCapital * 0.02 / sd, avail) : 0; }
+        if (notional < 1000 || notional > cash) { skippedCash++; continue; }
+        cash -= notional;
+        positions.push({ ticker: c.ticker, ed: date, ep: c.price, notional, stop: c.bot, hwm: c.price });
+      }
+    } else if (rok && positions.length >= maxPositions) {
+      // Count signals missed because book was full
+      const held = new Set(positions.map(p => p.ticker));
+      for (const tk of activeTickers) {
+        if (held.has(tk)) continue;
+        const r = tkRolling[tk];
+        const di = r.dateIdx[date];
+        if (di === undefined || di < boxPeriod + 1) continue;
+        const bar = allData[tk][di];
+        const prevTop = r.boxTop[di - 1], prevBot = r.boxBottom[di - 1];
+        const vr = bar.volume / (r.avgVol[di-1]||1);
+        const bw = prevTop > 0 ? (prevTop - prevBot) / prevBot : 0;
+        if (bar.close > prevTop && vr >= volMult && bw >= 0.01 && bw <= 0.20) skippedFull++;
+      }
+    }
+
+    // Mark-to-market
+    let pv = 0;
+    for (const pos of positions) {
+      const r = tkRolling[pos.ticker];
+      if (!r) continue;
+      const di = r.dateIdx[date];
+      if (di !== undefined) pv += pos.notional * (allData[pos.ticker][di].close / pos.ep);
+      else pv += pos.notional;
+    }
+    equityCurve.push(cash + pv);
+    dates.push(date);
+  }
+
+  // Close any remaining open positions at last bar (mark as open)
+  const lastDate = dates[dates.length - 1];
+  for (const pos of positions) {
+    const r = tkRolling[pos.ticker];
+    if (!r) continue;
+    const di = r.dateIdx[lastDate];
+    const exitPrice = di !== undefined ? allData[pos.ticker][di].close : pos.ep;
+    const nr = (exitPrice / pos.ep - 1) - (costBps / 10000) * 2;
+    trades.push({ ticker: pos.ticker, entryDate: pos.ed, exitDate: lastDate, entryPrice: pos.ep,
+      exitPrice, returnPct: +(nr * 100).toFixed(2),
+      holdDays: Math.round((new Date(lastDate) - new Date(pos.ed)) / 864e5),
+      exitReason: '● Open', open: true });
+  }
+
+  return { equityCurve, dates, trades, diagnostics: { totalSignals, skippedRegime, skippedFull, skippedCash, regimeOn, regimeOffSince, lastRegimeChange, regimeFilter } };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SCANNER (current state analysis)
+// ═══════════════════════════════════════════════════════════════
+function scanUniverse(allData, boxPeriod, volMult) {
+  const results = [];
+  for (const [tk, data] of Object.entries(allData)) {
+    if (tk === 'SPY') continue;
+    if (!data || data.length < boxPeriod + 20) continue;
+
+    const { boxTop, boxBottom, avgVol } = computeRollingBoxes(data, boxPeriod);
+    const last = data[data.length - 1];
+    const i = data.length - 1;
+    const prevTop = boxTop[i-1], prevBot = boxBottom[i-1];
+    const vr = last.volume / (avgVol[i-1] || 1);
+    const bw = prevTop > 0 ? (prevTop - prevBot) / prevBot : 0;
+    const pos = (prevTop !== prevBot) ? (last.close - prevBot) / (prevTop - prevBot) : 0.5;
+    const distToTop = prevTop > 0 ? (prevTop - last.close) / prevTop : 0; // % below box top
+    const distToBot = prevBot > 0 ? (last.close - prevBot) / prevBot : 0; // % above box bottom
+
+    // Volume trend: avg volume last 5d vs last 20d
+    let vol5 = 0, vol20 = 0;
+    for (let j = Math.max(0, data.length - 5); j < data.length; j++) vol5 += data[j].volume;
+    for (let j = Math.max(0, data.length - 20); j < data.length; j++) vol20 += data[j].volume;
+    vol5 /= Math.min(5, data.length); vol20 /= Math.min(20, data.length);
+    const volTrend = vol20 > 0 ? vol5 / vol20 : 1;
+
+    // Check last 10 days for recent breakout/breakdown events
+    let recentEvent = null, recentEventDate = null, recentEventDaysAgo = null;
+    for (let d = Math.max(boxPeriod + 1, data.length - 10); d < data.length; d++) {
+      const pt = boxTop[d-1], pb = boxBottom[d-1];
+      const av = avgVol[d-1] || 1;
+      const dayVr = data[d].volume / av;
+      if (data[d].close > pt && dayVr >= volMult) {
+        recentEvent = 'BREAKOUT';
+        recentEventDate = data[d].date;
+        recentEventDaysAgo = data.length - 1 - d;
+      } else if (data[d].close < pb) {
+        recentEvent = 'BREAKDOWN';
+        recentEventDate = data[d].date;
+        recentEventDaysAgo = data.length - 1 - d;
+      }
+    }
+
+    let signal = 'IN_BOX', strength = 50;
+    if (last.close > prevTop && vr >= volMult) { signal = 'BREAKOUT'; strength = Math.min(100, Math.round(vr / volMult * 40 + (last.close / prevTop - 1) * 500)); }
+    else if (last.close < prevBot) { signal = 'BREAKDOWN'; strength = Math.min(100, Math.round(50 + (1 - last.close / prevBot) * 500)); }
+    else if (pos > 0.85) { signal = 'NEAR_TOP'; strength = Math.round(pos * 70); }
+    else if (pos < 0.15) { signal = 'NEAR_BOTTOM'; strength = Math.round((1 - pos) * 70); }
+
+    results.push({
+      ticker: tk, price: last.close, boxTop: prevTop, boxBottom: prevBot, boxWidth: bw,
+      posInBox: pos, volRatio: vr, signal, strength, date: last.date,
+      distToTop, distToBot, volTrend,
+      recentEvent, recentEventDate, recentEventDaysAgo
+    });
+  }
+
+  results.sort((a, b) => {
+    const o = { BREAKOUT: 0, NEAR_TOP: 1, IN_BOX: 2, NEAR_BOTTOM: 3, BREAKDOWN: 4 };
+    return (o[a.signal] || 2) - (o[b.signal] || 2) || b.strength - a.strength;
+  });
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLOTLY CONFIG
+// ═══════════════════════════════════════════════════════════════
+const PL = () => ({ paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+  font: { family: 'DM Sans', size: 12, color: '#475569' },
+  margin: { t: 15, r: 15, b: 35, l: 55 },
+  xaxis: { gridcolor: '#e2e8f0', linecolor: '#e2e8f0' },
+  yaxis: { gridcolor: '#e2e8f0', linecolor: '#e2e8f0' },
+  legend: { bgcolor: 'transparent', font: { size: 10 } }, hovermode: 'x unified' });
+const PC = { responsive: true, displayModeBar: false };
+
+// ═══════════════════════════════════════════════════════════════
+// GLOBALS
+// ═══════════════════════════════════════════════════════════════
+let allStockData = {}, scanResults = [];
+
+function setLoading(show, text, sub, pct) {
+  document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+  if (text) document.getElementById('loadingText').textContent = text;
+  if (sub) document.getElementById('loadingSub').textContent = sub;
+  if (pct !== undefined) document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+function renderScanner(results) {
+  const bo = results.filter(r => r.signal === 'BREAKOUT');
+  const bd = results.filter(r => r.signal === 'BREAKDOWN');
+  const fm = results.filter(r => !['BREAKOUT','BREAKDOWN'].includes(r.signal));
+
+  document.getElementById('statTotal').textContent = results.length;
+  document.getElementById('statBreakout').textContent = bo.length;
+  document.getElementById('statForming').textContent = fm.length;
+  document.getElementById('statBreakdown').textContent = bd.length;
+  document.getElementById('breakoutCount').textContent = results.length + ' stocks';
+
+  // Timestamps
+  const latestDate = results.length ? results[0].date : '—';
+  document.getElementById('dataTimestamp').textContent = latestDate;
+  document.getElementById('refreshTimestamp').textContent = 'Scanned: ' + new Date().toLocaleString();
+
+  // ── ACTION REQUIRED (today's breakouts + breakdowns) ──
+  const actions = [...bo, ...bd];
+  document.getElementById('actionCount').textContent = actions.length;
+  if (actions.length === 0) {
+    document.getElementById('actionBody').innerHTML = '<div style="color:var(--text-muted);font-size:.76rem;padding:4px 0">No breakouts or breakdowns on the latest bar. Check Watch List for upcoming setups.</div>';
+  } else {
+    document.getElementById('actionBody').innerHTML = actions.map(r => {
+      const isBuy = r.signal === 'BREAKOUT';
+      const icon = isBuy ? '🟢' : '🔴';
+      const label = isBuy ? 'BREAKOUT' : 'BREAKDOWN';
+      const col = isBuy ? 'var(--accent-green)' : 'var(--accent-red)';
+      const pct = isBuy ? `+${((r.price/r.boxTop-1)*100).toFixed(1)}% above box top` : `${((r.price/r.boxBottom-1)*100).toFixed(1)}% below box bottom`;
+      const volNote = r.volRatio >= 1.5 ? `<span style="color:var(--accent-green)">Vol ${r.volRatio.toFixed(1)}× avg ✓</span>` : `Vol ${r.volRatio.toFixed(1)}× avg`;
+      return `<div class="clickable" onclick="viewTicker('${r.ticker}')" style="display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border)">
+        <span style="font-size:1.2rem">${icon}</span>
+        <div style="flex:1">
+          <div style="font-weight:700;color:${col};font-family:'JetBrains Mono',monospace;font-size:.82rem">${r.ticker} — ${label}</div>
+          <div style="font-size:.72rem;color:var(--text-secondary)">$${r.price.toFixed(2)} · ${pct} · ${volNote} · Box width ${(r.boxWidth*100).toFixed(1)}%</div>
+        </div>
+        <div style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:.72rem">
+          <div style="color:var(--text-muted)">Top: $${r.boxTop.toFixed(2)}</div>
+          <div style="color:var(--text-muted)">Bot: $${r.boxBottom.toFixed(2)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── WATCH LIST (within 5% of box top + not already breakout) ──
+  const watchCands = results.filter(r => r.signal !== 'BREAKOUT' && r.signal !== 'BREAKDOWN' && r.distToTop <= 0.05 && r.distToTop >= 0)
+    .sort((a, b) => a.distToTop - b.distToTop); // Closest to top first
+  document.getElementById('watchCount').textContent = watchCands.length;
+  document.getElementById('watchBody').innerHTML = watchCands.map(r => {
+    const distPct = (r.distToTop * 100).toFixed(1);
+    const volT = r.volTrend >= 1.2 ? `<span style="color:var(--accent-green);font-weight:700">↑ ${r.volTrend.toFixed(1)}×</span>` :
+                 r.volTrend <= 0.8 ? `<span style="color:var(--accent-red)">↓ ${r.volTrend.toFixed(1)}×</span>` :
+                 `${r.volTrend.toFixed(1)}×`;
+    const readiness = r.distToTop <= 0.02 ? '<span style="color:var(--accent-green);font-weight:700">🔥 IMMINENT</span>' :
+                      r.distToTop <= 0.03 ? '<span style="color:var(--accent-amber);font-weight:700">⚡ CLOSE</span>' :
+                      '<span style="color:var(--text-muted)">👀 WATCH</span>';
+    return `<tr class="clickable" onclick="viewTicker('${r.ticker}')">
+      <td style="color:var(--accent-cyan);font-weight:700">${r.ticker}</td>
+      <td>$${r.price.toFixed(2)}</td><td>$${r.boxTop.toFixed(2)}</td>
+      <td style="font-weight:600;color:${r.distToTop<=0.02?'var(--accent-green)':'var(--accent-amber)'}">${distPct}% below</td>
+      <td>${volT}</td><td>${r.volRatio.toFixed(1)}×</td>
+      <td>${(r.boxWidth*100).toFixed(1)}%</td>
+      <td>${readiness}</td></tr>`;
+  }).join('');
+
+  // ── RECENT ACTIVITY (events in last 10 days) ──
+  const recentEvents = results.filter(r => r.recentEvent != null)
+    .sort((a, b) => (a.recentEventDaysAgo || 99) - (b.recentEventDaysAgo || 99));
+  document.getElementById('recentCount').textContent = recentEvents.length + ' events';
+  document.getElementById('recentBody').innerHTML = recentEvents.map(r => {
+    const isBuy = r.recentEvent === 'BREAKOUT';
+    const col = isBuy ? 'var(--accent-green)' : 'var(--accent-red)';
+    return `<tr class="clickable" onclick="viewTicker('${r.ticker}')">
+      <td style="color:var(--accent-cyan);font-weight:700">${r.ticker}</td>
+      <td style="color:${col};font-weight:700">${r.recentEvent === 'BREAKOUT' ? '▲ Breakout' : '▼ Breakdown'}</td>
+      <td>${r.recentEventDate}</td>
+      <td>${r.recentEventDaysAgo === 0 ? '<b>Today</b>' : r.recentEventDaysAgo + 'd ago'}</td>
+      <td>$${r.price.toFixed(2)}</td><td>$${r.boxTop.toFixed(2)}</td>
+      <td>${r.volRatio.toFixed(1)}×</td></tr>`;
+  }).join('');
+
+  // ── ALL BOX STATUS ──
+  document.getElementById('signalBody').innerHTML = results.map(r => {
+    const sc = r.signal === 'BREAKOUT' ? 'signal-buy' : r.signal === 'BREAKDOWN' ? 'signal-sell' : 'signal-hold';
+    const barPct = Math.max(0, Math.min(100, r.posInBox * 100));
+    const barCol = r.posInBox > .8 ? 'var(--accent-green)' : r.posInBox < .2 ? 'var(--accent-red)' : 'var(--accent-cyan)';
+    return `<tr class="clickable" onclick="viewTicker('${r.ticker}')">
+      <td style="color:var(--accent-cyan);font-weight:700">${r.ticker}</td><td>$${r.price.toFixed(2)}</td>
+      <td>$${r.boxTop.toFixed(2)}</td><td>$${r.boxBottom.toFixed(2)}</td>
+      <td><div style="display:flex;align-items:center;gap:6px"><div style="width:60px;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${barPct}%;background:${barCol};border-radius:3px"></div></div><span style="font-size:.66rem;color:var(--text-muted)">${barPct.toFixed(0)}%</span></div></td>
+      <td style="color:${r.volRatio>=1.5?'var(--accent-green)':''}">${r.volRatio.toFixed(1)}×</td>
+      <td>${(r.boxWidth*100).toFixed(1)}%</td>
+      <td><span class="${sc}">${r.signal.replace('_',' ')}</span></td></tr>`;
+  }).join('');
+
+  const sel = document.getElementById('chartTicker');
+  sel.innerHTML = results.map(r => `<option value="${r.ticker}">${r.ticker}</option>`).join('');
+}
+
+function renderBacktest(res, cap) {
+  const { equityCurve: eq, dates, trades, diagnostics } = res;
+  if (!eq.length) return;
+
+  const yrs = (new Date(dates[dates.length-1]) - new Date(dates[0])) / (365.25 * 864e5);
+  const cagr = (Math.pow(eq[eq.length-1] / cap, 1 / yrs) - 1) * 100;
+  const dr = []; for (let i = 1; i < eq.length; i++) dr.push(eq[i] / eq[i-1] - 1);
+  const avg = dr.reduce((a, b) => a + b, 0) / dr.length;
+  const std = Math.sqrt(dr.reduce((a, r) => a + (r - avg) ** 2, 0) / dr.length);
+  const sharpe = std > 0 ? (avg / std) * Math.sqrt(252) : 0;
+
+  let peak = cap, maxDD = 0; const dds = [];
+  for (const e of eq) { peak = Math.max(peak, e); const d = (e / peak - 1) * 100; dds.push(d); maxDD = Math.min(maxDD, d); }
+
+  const wins = trades.filter(t => t.returnPct > 0), losses = trades.filter(t => t.returnPct <= 0);
+  const wr = trades.length ? (wins.length / trades.length * 100) : 0;
+  const aw = wins.length ? wins.reduce((a, t) => a + t.returnPct, 0) / wins.length : 0;
+  const al = losses.length ? Math.abs(losses.reduce((a, t) => a + t.returnPct, 0) / losses.length) : 0;
+
+  const s = (id, v, c) => { const e = document.getElementById(id); e.textContent = v; if (c) e.style.color = c; };
+  s('btCAGR', cagr.toFixed(1) + '%', cagr > 0 ? 'var(--accent-green)' : 'var(--accent-red)');
+  s('btSharpe', sharpe.toFixed(2), sharpe > 1 ? 'var(--accent-green)' : sharpe > .5 ? 'var(--accent-amber)' : 'var(--accent-red)');
+  s('btMaxDD', maxDD.toFixed(1) + '%', 'var(--accent-red)');
+  s('btWinRate', wr.toFixed(0) + '%', wr > 50 ? 'var(--accent-green)' : 'var(--accent-amber)');
+  s('btTrades', '' + trades.length);
+  s('btAvgWin', aw.toFixed(1) + '% / ' + al.toFixed(1) + '%');
+  document.getElementById('tradeLogCount').textContent = trades.length;
+
+  // SPY benchmark — build date→close lookup for O(1)
+  const spy = allStockData['SPY'];
+  const spyByDate = {};
+  spy.forEach(b => { spyByDate[b.date] = b.close; });
+  const spyBase = spyByDate[dates[0]] || spy[0].close;
+  const spyNorm = dates.map(d => {
+    const c = spyByDate[d];
+    return c ? (c / spyBase) * cap : cap;
+  });
+
+  Plotly.newPlot('btEquityChart', [
+    { x: dates, y: eq, type: 'scatter', mode: 'lines', name: 'Darvas', line: { color: '#0891b2', width: 2.5 } },
+    { x: dates, y: spyNorm, type: 'scatter', mode: 'lines', name: 'SPY B&H', line: { color: '#94a3b8', width: 1.5, dash: 'dot' } }
+  ], { ...PL(), yaxis: { ...PL().yaxis, title: 'Value (S$)', tickformat: ',.0f' } }, PC);
+
+  Plotly.newPlot('btDrawdownChart', [{ x: dates, y: dds, type: 'scatter', mode: 'lines', fill: 'tozeroy', fillcolor: 'rgba(220,38,38,.08)', line: { color: '#dc2626', width: 1.5 } }], { ...PL(), yaxis: { ...PL().yaxis, ticksuffix: '%' } }, PC);
+
+  // Monthly heatmap
+  const mr = {}; for (let i = 1; i < dates.length; i++) { const ym = dates[i].substring(0, 7); if (!mr[ym]) mr[ym] = { s: eq[i-1], e: eq[i] }; else mr[ym].e = eq[i]; }
+  const mos = Object.keys(mr).sort();
+  const yrsArr = [...new Set(mos.map(m => m.substring(0, 4)))];
+  const mn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const hz = [], ht = [];
+  for (const yr of yrsArr) { const row = [], tr = []; for (let m = 1; m <= 12; m++) { const k = `${yr}-${String(m).padStart(2, '0')}`; if (mr[k]) { const r = (mr[k].e / mr[k].s - 1) * 100; row.push(r); tr.push(r.toFixed(1) + '%'); } else { row.push(null); tr.push(''); } } hz.push(row); ht.push(tr); }
+  Plotly.newPlot('btMonthlyChart', [{ z: hz, x: mn, y: yrsArr, text: ht, texttemplate: '%{text}', type: 'heatmap',
+    colorscale: [[0, '#dc2626'], [.45, '#f8fafc'], [.55, '#f8fafc'], [1, '#16a34a']], zmid: 0,
+    colorbar: { ticksuffix: '%', len: .8, thickness: 12 } }], { ...PL(), margin: { t: 15, r: 70, b: 35, l: 45 }, yaxis: { ...PL().yaxis, autorange: 'reversed' } }, PC);
+
+  // Trade log - sort latest first, show open positions
+  const openTrades = trades.filter(t => t.open);
+  const closedTrades = trades.filter(t => !t.open);
+  const sorted = [...trades].sort((a, b) => {
+    // Open positions first, then by exit date desc
+    if (a.open && !b.open) return -1;
+    if (!a.open && b.open) return 1;
+    return b.exitDate.localeCompare(a.exitDate);
+  });
+
+  document.getElementById('tradeLogCount').textContent = `${closedTrades.length} closed · ${openTrades.length} open`;
+
+  // Diagnostics
+  const diag = document.getElementById('tradeLogDiag');
+  if (diagnostics) {
+    const parts = [`${diagnostics.totalSignals} signals detected`];
+    if (diagnostics.skippedRegime > 0) parts.push(`<span style="color:var(--accent-red)">${diagnostics.skippedRegime} blocked by regime</span>`);
+    if (diagnostics.skippedFull > 0) parts.push(`<span style="color:var(--accent-amber)">${diagnostics.skippedFull} skipped (book full)</span>`);
+    if (diagnostics.skippedCash > 0) parts.push(`${diagnostics.skippedCash} skipped (no cash)`);
+    parts.push(`<b>${closedTrades.length + openTrades.length} executed</b>`);
+
+    let regimeNote = '';
+    if (diagnostics.regimeFilter !== 'none') {
+      if (!diagnostics.regimeOn && diagnostics.regimeOffSince) {
+        regimeNote = `<div style="margin-top:4px;padding:4px 8px;background:var(--accent-red-dim);border-radius:4px;color:var(--accent-red);font-weight:600">⚠️ REGIME OFF since ${diagnostics.regimeOffSince} — SPY below ${diagnostics.regimeFilter === 'ma200' ? '200d' : '50d'} MA. No new entries allowed.</div>`;
+      } else {
+        regimeNote = `<div style="margin-top:4px;padding:4px 8px;background:var(--accent-green-dim);border-radius:4px;color:var(--accent-green)">✅ Regime ON — SPY above ${diagnostics.regimeFilter === 'ma200' ? '200d' : '50d'} MA</div>`;
+      }
+    }
+    diag.innerHTML = parts.join(' → ') + regimeNote;
+  }
+
+  document.getElementById('tradeLogBody').innerHTML = sorted.slice(0, 300).map(t => {
+    const isOpen = t.open;
+    const rowStyle = isOpen ? ' style="background:var(--accent-cyan-dim)"' : '';
+    const exitCol = isOpen ? '<span style="color:var(--accent-cyan);font-weight:600">OPEN</span>' : t.exitDate;
+    const statusCol = isOpen
+      ? `<span style="color:var(--accent-cyan);font-weight:600">● Live</span>`
+      : `<span style="color:var(--text-muted);font-size:.68rem">${t.exitReason}</span>`;
+    return `<tr${rowStyle}><td>${t.entryDate}</td><td>${exitCol}</td><td style="color:var(--accent-cyan);font-weight:600">${t.ticker}</td>
+    <td>$${t.entryPrice.toFixed(2)}</td><td>$${t.exitPrice.toFixed(2)}</td>
+    <td style="color:${t.returnPct > 0 ? 'var(--accent-green)' : 'var(--accent-red)'};font-weight:600">${t.returnPct > 0 ? '+' : ''}${t.returnPct.toFixed(1)}%</td>
+    <td>${t.holdDays}d</td><td>${statusCol}</td></tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHART
+// ═══════════════════════════════════════════════════════════════
+function viewTicker(tk) {
+  document.getElementById('chartTicker').value = tk;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab="chart"]').classList.add('active');
+  document.getElementById('tab-chart').classList.add('active');
+  loadTickerChart();
+}
+
+function loadTickerChart() {
+  const tk = document.getElementById('chartTicker').value;
+  const data = allStockData[tk];
+  if (!data) return;
+  const bp = parseInt(document.getElementById('inpBoxPeriod').value) || 20;
+  const vm = parseFloat(document.getElementById('inpVolMult').value) || 1.5;
+  const rects = getBoxRects(data, bp);
+
+  // Run a mini-backtest for this single ticker to get trade entries/exits
+  const trades = getSingleTickerTrades(tk, data, bp, vm);
+
+  document.getElementById('chartTickerTitle').textContent = `${tk} — Darvas Boxes (${bp}d) · ${trades.length} trades`;
+  document.getElementById('csBoxes').textContent = rects.length;
+  document.getElementById('csBreakouts').textContent = rects.filter(b => b.resolution === 'breakout').length;
+  document.getElementById('csBreakdowns').textContent = rects.filter(b => b.resolution === 'breakdown').length;
+
+  const showDays = 400;
+  const d = data.length > showDays ? data.slice(-showDays) : data;
+  const dStart = d[0].date;
+
+  const candle = { x: d.map(v => v.date), open: d.map(v => v.open), high: d.map(v => v.high), low: d.map(v => v.low), close: d.map(v => v.close),
+    type: 'candlestick', name: tk, increasing: { line: { color: '#16a34a' } }, decreasing: { line: { color: '#dc2626' } } };
+
+  const shapes = rects.filter(b => b.endDate >= dStart).map(bx => ({
+    type: 'rect', x0: bx.startDate < dStart ? dStart : bx.startDate, x1: bx.endDate, y0: bx.bottom, y1: bx.top,
+    fillcolor: bx.resolution === 'breakout' ? 'rgba(22,163,74,.06)' : bx.resolution === 'breakdown' ? 'rgba(220,38,38,.06)' : 'rgba(8,145,178,.06)',
+    line: { color: bx.resolution === 'breakout' ? 'rgba(22,163,74,.35)' : bx.resolution === 'breakdown' ? 'rgba(220,38,38,.35)' : 'rgba(8,145,178,.35)', width: 1, dash: 'dot' }
+  }));
+
+  // Entry/exit annotations — using Plotly annotations for much better visibility
+  const visibleTrades = trades.filter(t => t.entryDate >= dStart || t.exitDate >= dStart);
+
+  const annotations = [];
+  const entryX = [], entryY = [];
+  const exitX = [], exitY = [];
+
+  for (const t of visibleTrades) {
+    if (t.entryDate >= dStart) {
+      entryX.push(t.entryDate);
+      entryY.push(t.entryPrice);
+      annotations.push({
+        x: t.entryDate, y: t.entryPrice, xref: 'x', yref: 'y',
+        text: `<b>▲ BUY $${t.entryPrice.toFixed(0)}</b>`,
+        showarrow: true, arrowhead: 0, arrowsize: 1, arrowwidth: 2,
+        arrowcolor: '#16a34a', ax: 0, ay: 45,
+        font: { size: 11, color: '#fff', family: 'JetBrains Mono' },
+        bgcolor: '#16a34a', bordercolor: '#16a34a', borderwidth: 1, borderpad: 4,
+        opacity: 0.95
+      });
+    }
+    if (t.exitDate >= dStart && !t.open) {
+      exitX.push(t.exitDate);
+      exitY.push(t.exitPrice);
+      const pnl = t.returnPct;
+      const pnlStr = pnl >= 0 ? `+${pnl.toFixed(1)}%` : `${pnl.toFixed(1)}%`;
+      // SELL is always red (it's an exit action). P&L shown in text.
+      annotations.push({
+        x: t.exitDate, y: t.exitPrice, xref: 'x', yref: 'y',
+        text: `<b>▼ SELL ${pnlStr}</b>`,
+        showarrow: true, arrowhead: 0, arrowsize: 1, arrowwidth: 2,
+        arrowcolor: '#dc2626', ax: 0, ay: -45,
+        font: { size: 11, color: '#fff', family: 'JetBrains Mono' },
+        bgcolor: '#dc2626', bordercolor: '#dc2626', borderwidth: 1, borderpad: 4,
+        opacity: 0.95
+      });
+    }
+  }
+
+  // Entry dots (large, on the price)
+  const entryMarkers = {
+    x: entryX, y: entryY, mode: 'markers', type: 'scatter', name: 'Entry',
+    marker: { symbol: 'triangle-up', size: 16, color: '#16a34a', line: { width: 2, color: '#fff' } },
+    hoverinfo: 'skip'
+  };
+  // Exit dots
+  const exitMarkers = {
+    x: exitX, y: exitY, mode: 'markers', type: 'scatter', name: 'Exit',
+    marker: { symbol: 'triangle-down', size: 16, color: '#dc2626', line: { width: 2, color: '#fff' } },
+    hoverinfo: 'skip'
+  };
+
+  // Connect entry to exit with lines
+  const tradeLines = [];
+  for (const t of visibleTrades) {
+    if (t.entryDate >= dStart && t.exitDate >= dStart && !t.open) {
+      tradeLines.push({
+        type: 'line', x0: t.entryDate, x1: t.exitDate,
+        y0: t.entryPrice, y1: t.exitPrice,
+        line: { color: t.returnPct >= 0 ? 'rgba(22,163,74,.4)' : 'rgba(220,38,38,.4)', width: 2, dash: 'dash' }
+      });
+    }
+  }
+
+  const vol = { x: d.map(v => v.date), y: d.map(v => v.volume), type: 'bar', name: 'Vol',
+    marker: { color: d.map((v, i) => i > 0 && v.close >= d[i-1].close ? 'rgba(22,163,74,.25)' : 'rgba(220,38,38,.25)') }, yaxis: 'y2' };
+
+  Plotly.newPlot('boxChart', [candle, entryMarkers, exitMarkers, vol], { ...PL(),
+    shapes: [...shapes, ...tradeLines],
+    annotations,
+    xaxis: { gridcolor: '#e2e8f0', rangeslider: { visible: false } },
+    yaxis: { gridcolor: '#e2e8f0', title: 'Price', domain: [.22, 1] },
+    yaxis2: { gridcolor: '#e2e8f0', domain: [0, .18], showticklabels: false },
+    margin: { t: 15, r: 15, b: 35, l: 55 },
+    showlegend: false }, PC);
+
+  // Render trade summary below chart
+  try { renderTickerTradeSummary(tk, trades); } catch(e) { console.error('Trade summary error:', e); }
+}
+
+// Single-ticker trade extraction using rolling Donchian
+function getSingleTickerTrades(ticker, data, boxPeriod, volMult) {
+  const { boxTop, boxBottom, avgVol } = computeRollingBoxes(data, boxPeriod);
+  const trades = [];
+  let inTrade = false, entryPrice = 0, entryDate = '', entryStop = 0;
+  let cooldown = 0; // bars to wait after exit before re-entry
+
+  for (let i = boxPeriod + 1; i < data.length; i++) {
+    const bar = data[i];
+    const prevTop = boxTop[i-1], prevBot = boxBottom[i-1];
+    const prevAV = avgVol[i-1] || 1;
+    const vr = bar.volume / prevAV;
+    const bw = prevTop > 0 ? (prevTop - prevBot) / prevBot : 0;
+
+    if (cooldown > 0) { cooldown--; continue; }
+
+    if (inTrade) {
+      // Exit: close below entry box bottom or current rolling box bottom
+      if (bar.close < entryStop || bar.close < prevBot) {
+        const ret = (bar.close / entryPrice - 1) * 100;
+        trades.push({ entryDate, exitDate: bar.date, entryPrice, exitPrice: bar.close, returnPct: +ret.toFixed(2),
+          holdDays: Math.round((new Date(bar.date) - new Date(entryDate)) / 864e5) });
+        inTrade = false;
+        cooldown = 1; // Skip 1 bar before allowing re-entry
+      }
+    } else {
+      // Entry: close > prev box top, volume confirmed, reasonable box
+      if (bar.close > prevTop && vr >= volMult && bw >= 0.01 && bw <= 0.20) {
+        inTrade = true;
+        entryPrice = bar.close;
+        entryDate = bar.date;
+        entryStop = prevBot;
+      }
+    }
+  }
+
+  // Close open position at last bar
+  if (inTrade) {
+    const last = data[data.length - 1];
+    trades.push({ entryDate, exitDate: last.date, entryPrice, exitPrice: last.close,
+      returnPct: +((last.close / entryPrice - 1) * 100).toFixed(2),
+      holdDays: Math.round((new Date(last.date) - new Date(entryDate)) / 864e5), open: true });
+  }
+
+  return trades;
+}
+
+function renderTickerTradeSummary(ticker, trades) {
+  const container = document.getElementById('tickerTradeStats');
+  if (!trades.length) {
+    container.innerHTML = '<div class="info-box">No trades detected for this ticker with current parameters.</div>';
+    return;
+  }
+
+  const closedTrades = trades.filter(t => !t.open);
+  const openTrade = trades.find(t => t.open);
+  const wins = closedTrades.filter(t => t.returnPct > 0);
+  const losses = closedTrades.filter(t => t.returnPct <= 0);
+  const totalRet = closedTrades.reduce((a, t) => a * (1 + t.returnPct / 100), 1);
+  const cumRet = (totalRet - 1) * 100;
+  const avgW = wins.length ? (wins.reduce((a, t) => a + t.returnPct, 0) / wins.length) : 0;
+  const avgL = losses.length ? (losses.reduce((a, t) => a + t.returnPct, 0) / losses.length) : 0;
+  const avgHold = closedTrades.length ? (closedTrades.reduce((a, t) => a + t.holdDays, 0) / closedTrades.length) : 0;
+
+  // Sort latest first
+  const sorted = [...trades].reverse();
+
+  container.innerHTML = `
+    <div class="grid g4" style="margin-bottom:10px">
+      <div class="stat-box"><div class="stat-value" style="color:${cumRet>=0?'var(--accent-green)':'var(--accent-red)'}">${cumRet>=0?'+':''}${cumRet.toFixed(1)}%</div><div class="stat-label">Cumulative (closed)</div></div>
+      <div class="stat-box"><div class="stat-value">${closedTrades.length}</div><div class="stat-label">${wins.length}W / ${losses.length}L${openTrade?' · 1 open':''}</div></div>
+      <div class="stat-box"><div class="stat-value" style="color:var(--accent-green)">${avgW.toFixed(1)}%</div><div class="stat-label">Avg Win (${Math.round(avgHold)}d avg hold)</div></div>
+      <div class="stat-box"><div class="stat-value" style="color:var(--accent-red)">${avgL.toFixed(1)}%</div><div class="stat-label">Avg Loss</div></div>
+    </div>
+    <div class="table-scroll" style="max-height:250px"><table class="tbl"><thead><tr><th>Entry</th><th>Exit</th><th>In$</th><th>Out$</th><th>P&L%</th><th>Days</th><th>Status</th></tr></thead><tbody>
+    ${sorted.map(t => `<tr${t.open?' style="background:var(--accent-cyan-dim)"':''}>
+      <td>${t.entryDate}</td><td>${t.open?'<span style="color:var(--accent-cyan);font-weight:600">OPEN</span>':t.exitDate}</td>
+      <td>$${t.entryPrice.toFixed(2)}</td><td>$${t.exitPrice.toFixed(2)}</td>
+      <td style="color:${t.returnPct>=0?'var(--accent-green)':'var(--accent-red)'};font-weight:600">${t.returnPct>=0?'+':''}${t.returnPct.toFixed(1)}%</td>
+      <td>${t.holdDays}d</td>
+      <td>${t.open?'<span style="color:var(--accent-cyan);font-weight:600">● Live</span>':'Closed'}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LIVE YAHOO FINANCE FETCH
+// ═══════════════════════════════════════════════════════════════
+function fetchWithTimeout(url, ms=10000) {
+  return Promise.race([fetch(url), new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), ms))]);
+}
+const PROXIES = [
+  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
+];
+let activeProxy = 0;
+
+async function fetchYahoo(ticker, period='5y') {
+  const base = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${period}&interval=1d`;
+  for (let a = 0; a < PROXIES.length; a++) {
+    const pi = (activeProxy + a) % PROXIES.length;
+    try {
+      const r = await fetchWithTimeout(PROXIES[pi](base), 12000);
+      if (!r.ok) continue;
+      const txt = await r.text();
+      let j; try { j = JSON.parse(txt); } catch(e) { continue; }
+      if (!j.chart?.result) continue;
+      const res = j.chart.result[0], ts = res.timestamp, q = res.indicators.quote[0], data = [];
+      for (let i = 0; i < ts.length; i++) {
+        if (q.close[i] != null && q.high[i] != null && q.low[i] != null && q.volume[i] != null)
+          data.push({ date: new Date(ts[i]*1000).toISOString().split('T')[0], open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume[i] });
+      }
+      if (data.length > 0) { activeProxy = pi; return data; }
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+// fetchLiveData removed — runFullPipeline now fetches live directly
+
+// ═══════════════════════════════════════════════════════════════
+// RE-RUN BACKTEST (with current data, new parameters)
+// ═══════════════════════════════════════════════════════════════
+function rerunBacktest() {
+  if (!allStockData || !allStockData['SPY']) { alert('No data loaded. Run Scan & Backtest first.'); return; }
+
+  const bp = parseInt(document.getElementById('inpBoxPeriod').value) || 20;
+  const vm = parseFloat(document.getElementById('inpVolMult').value) || 1.5;
+  const params = {
+    boxPeriod: bp, volMult: vm,
+    maxPositions: parseInt(document.getElementById('btMaxPos').value) || 10,
+    initialCapital: parseFloat(document.getElementById('btCapital').value) || 1000000,
+    costBps: parseFloat(document.getElementById('btCost').value) || 10,
+    stopType: document.getElementById('btStop').value,
+    regimeFilter: document.getElementById('btRegime').value,
+    sizing: document.getElementById('btSizing').value
+  };
+
+  // Show brief loading state
+  const btn = document.querySelector('#tab-backtest .btn-primary');
+  if (btn) { btn.textContent = '⏳ Running...'; btn.disabled = true; }
+
+  // Use setTimeout to allow UI to update before heavy computation
+  setTimeout(() => {
+    const btRes = runBacktest(allStockData, params);
+    if (btRes) renderBacktest(btRes, params.initialCapital);
+    if (btn) { btn.textContent = '⚡ Run Backtest'; btn.disabled = false; }
+    document.getElementById('statusLeft').textContent = `${scanResults.length} stocks · ${btRes?.trades?.length || 0} trades · ${new Date().toLocaleTimeString()}`;
+  }, 30);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════
+let autoRefreshTimer = null;
+function toggleAutoRefresh() {
+  const on = document.getElementById('autoRefresh').checked;
+  if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+  if (on) {
+    autoRefreshTimer = setInterval(() => {
+      console.log('Auto-refresh triggered');
+      runFullPipeline();
+    }, 30 * 60 * 1000); // 30 minutes
+  }
+}
+
+async function runFullPipeline() {
+  const bp = parseInt(document.getElementById('inpBoxPeriod').value) || 20;
+  const vm = parseFloat(document.getElementById('inpVolMult').value) || 1.5;
+  const statusEl = document.getElementById('liveStatus');
+  const btnEl = document.getElementById('btnLive');
+
+  setLoading(true, 'Fetching live data...', `${UNIVERSE.length} tickers from Yahoo Finance`, 10);
+  btnEl.disabled = true;
+  btnEl.textContent = '⏳ Fetching...';
+
+  let ok = 0, fail = 0;
+  const liveData = {};
+  const failedTickers = [];
+
+  for (let i = 0; i < UNIVERSE.length; i++) {
+    const tk = UNIVERSE[i];
+    const pct = Math.round(10 + (i / UNIVERSE.length) * 50);
+    setLoading(true, 'Fetching live data...', `${tk} (${i+1}/${UNIVERSE.length})`, pct);
+    statusEl.textContent = `${tk} (${i+1}/${UNIVERSE.length})`;
+
+    try {
+      const d = await fetchYahoo(tk, '5y');
+      if (d && d.length > 100) { liveData[tk] = d; ok++; }
+      else { fail++; failedTickers.push(tk); }
+    } catch(e) { fail++; failedTickers.push(tk); }
+  }
+
+  btnEl.disabled = false;
+  btnEl.textContent = '🔄 Refresh Data';
+
+  if (ok < 3 || !liveData['SPY']) {
+    setLoading(false);
+    statusEl.textContent = `❌ Failed (${fail} errors). CORS proxy may be blocked. Try again.`;
+    document.getElementById('statusBadge').textContent = 'ERROR';
+    return;
+  }
+
+  allStockData = liveData;
+  statusEl.textContent = `✅ ${ok} loaded${fail > 0 ? `, ${fail} failed (${failedTickers.join(', ')})` : ''}`;
+
+  setLoading(true, 'Scanning universe...', 'Rolling Donchian box detection', 70);
+  await new Promise(r => setTimeout(r, 30));
+
+  scanResults = scanUniverse(allStockData, bp, vm);
+  renderScanner(scanResults);
+
+  setLoading(true, 'Running backtest...', '5-year simulation on live data', 85);
+  await new Promise(r => setTimeout(r, 30));
+
+  const params = { boxPeriod: bp, volMult: vm, maxPositions: parseInt(document.getElementById('btMaxPos').value) || 10,
+    initialCapital: parseFloat(document.getElementById('btCapital').value) || 1000000,
+    costBps: parseFloat(document.getElementById('btCost').value) || 10,
+    stopType: document.getElementById('btStop').value,
+    regimeFilter: document.getElementById('btRegime').value,
+    sizing: document.getElementById('btSizing').value };
+
+  const btRes = runBacktest(allStockData, params);
+  if (btRes) renderBacktest(btRes, params.initialCapital);
+
+  setLoading(false);
+  document.getElementById('statusBadge').textContent = 'LIVE';
+  document.getElementById('statusLeft').textContent = `LIVE: ${ok} stocks · ${btRes?.trades?.length || 0} trades · ${new Date().toLocaleTimeString()}`;
+}
+
+runFullPipeline();
+</script>
+</body>
+</html>
