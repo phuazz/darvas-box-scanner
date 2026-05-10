@@ -1064,40 +1064,22 @@ function renderTickerTradeSummary(ticker, trades) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// LIVE YAHOO FINANCE FETCH
+// UNIVERSE LOADER — fetches data/universe.json (built daily by
+// scripts/fetch_universe.py via GitHub Actions). No CORS, no proxy
+// chain, no per-ticker rate limits.
 // ═══════════════════════════════════════════════════════════════
-function fetchWithTimeout(url, ms=10000) {
-  return Promise.race([fetch(url), new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), ms))]);
-}
-const PROXIES = [
-  (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`
-];
-let activeProxy = 0;
-
-async function fetchYahoo(ticker, period='5y') {
-  const base = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${period}&interval=1d`;
-  for (let a = 0; a < PROXIES.length; a++) {
-    const pi = (activeProxy + a) % PROXIES.length;
-    try {
-      const r = await fetchWithTimeout(PROXIES[pi](base), 12000);
-      if (!r.ok) continue;
-      const txt = await r.text();
-      let j; try { j = JSON.parse(txt); } catch(e) { continue; }
-      if (!j.chart?.result) continue;
-      const res = j.chart.result[0], ts = res.timestamp, q = res.indicators.quote[0], data = [];
-      for (let i = 0; i < ts.length; i++) {
-        if (q.close[i] != null && q.high[i] != null && q.low[i] != null && q.volume[i] != null)
-          data.push({ date: new Date(ts[i]*1000).toISOString().split('T')[0], open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume[i] });
-      }
-      if (data.length > 0) { activeProxy = pi; return data; }
-    } catch(e) { continue; }
+async function loadUniverseJson() {
+  // Cache-bust URL so a freshly-pushed JSON propagates without users
+  // having to hard-refresh. The browser/CDN still serve from cache when
+  // the underlying file hasn't changed (304 Not Modified).
+  const r = await fetch('data/universe.json', { cache: 'default' });
+  if (!r.ok) throw new Error(`HTTP ${r.status} fetching data/universe.json`);
+  const json = await r.json();
+  if (!json.tickers || !json.tickers.SPY) {
+    throw new Error('universe.json malformed (missing tickers.SPY)');
   }
-  return null;
+  return json;
 }
-
-// fetchLiveData removed — runFullPipeline now fetches live directly
 
 // ═══════════════════════════════════════════════════════════════
 // RE-RUN BACKTEST (with current data, new parameters)
@@ -1172,47 +1154,40 @@ async function runFullPipeline(forceRefresh = false) {
     } catch(e) { /* cache miss, proceed to fetch */ }
   }
 
-  // ── FETCH LIVE (parallel, batches of 8) ──
+  // ── FETCH STATIC JSON (built daily by scripts/fetch_universe.py) ──
   if (!liveData || !liveData['SPY']) {
-    setLoading(true, 'Fetching live data...', `${UNIVERSE.length} tickers in parallel`, 10);
-
-    liveData = {};
-    let ok = 0, fail = 0;
-    const failedTickers = [];
-    const BATCH = 8; // parallel concurrency limit
-
-    for (let b = 0; b < UNIVERSE.length; b += BATCH) {
-      const batch = UNIVERSE.slice(b, b + BATCH);
-      const pct = Math.round(10 + (b / UNIVERSE.length) * 55);
-      setLoading(true, 'Fetching live data...', `${batch.join(', ')} (${Math.min(b + BATCH, UNIVERSE.length)}/${UNIVERSE.length})`, pct);
-      statusEl.textContent = `Batch ${Math.floor(b/BATCH)+1}/${Math.ceil(UNIVERSE.length/BATCH)}`;
-
-      const results = await Promise.allSettled(batch.map(tk => fetchYahoo(tk, '5y').then(d => ({ tk, d }))));
-
-      for (const r of results) {
-        if (r.status === 'fulfilled' && r.value.d && r.value.d.length > 100) {
-          liveData[r.value.tk] = r.value.d; ok++;
-        } else {
-          const tk = r.status === 'fulfilled' ? r.value.tk : batch[results.indexOf(r)];
-          fail++; failedTickers.push(tk);
-        }
-      }
-    }
-
-    btnEl.disabled = false;
-    btnEl.textContent = '🔄 Refresh Data';
-
-    if (ok < 3 || !liveData['SPY']) {
+    setLoading(true, 'Loading universe data...', 'data/universe.json', 20);
+    let json;
+    try {
+      json = await loadUniverseJson();
+    } catch (err) {
+      btnEl.disabled = false;
+      btnEl.textContent = '🔄 Refresh Data';
       setLoading(false);
-      statusEl.textContent = `❌ Failed (${fail} errors). CORS proxy may be blocked. Try again.`;
+      statusEl.textContent = `❌ ${err.message}. Workflow may not have run yet — try manual dispatch in GitHub Actions.`;
       document.getElementById('statusBadge').textContent = 'ERROR';
       return;
     }
 
-    statusEl.textContent = `✅ ${ok} loaded${fail > 0 ? `, ${fail} failed (${failedTickers.join(', ')})` : ''}`;
+    liveData = json.tickers;
+    const ok = Object.keys(liveData).length;
+    const fail = (json.failures || []).length;
+    const failedTickers = json.failures || [];
+    setLoading(true, 'Loading universe data...', `${ok} tickers ready`, 60);
 
-    // Save to cache
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(liveData)); localStorage.setItem(CACHE_TS_KEY, '' + Date.now()); } catch(e) { /* quota exceeded, skip */ }
+    btnEl.disabled = false;
+    btnEl.textContent = '🔄 Refresh Data';
+
+    const asOf = json.as_of_utc ? json.as_of_utc.replace('T', ' ').replace(/:00\+00:00$/, ' UTC') : 'unknown';
+    statusEl.textContent = `✅ ${ok} loaded${fail > 0 ? `, ${fail} failed (${failedTickers.join(', ')})` : ''} · refreshed ${asOf}`;
+
+    // Cache the unwrapped tickers map keyed by as_of_utc — invalidates
+    // automatically when a new workflow run produces a different timestamp.
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(liveData));
+      localStorage.setItem(CACHE_TS_KEY, '' + Date.now());
+      localStorage.setItem(CACHE_KEY + '_asof', json.as_of_utc || '');
+    } catch(e) { /* quota exceeded, skip */ }
   } else {
     btnEl.disabled = false;
     btnEl.textContent = '🔄 Refresh Data';
